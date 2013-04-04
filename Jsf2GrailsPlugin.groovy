@@ -1,45 +1,35 @@
-import com.sun.faces.application.ApplicationFactoryImpl as Afact
-import com.sun.faces.config.ConfigManager
-import com.sun.faces.config.ConfigureListener
-import com.sun.faces.config.WebConfiguration
-import com.sun.faces.context.ExceptionHandlerFactoryImpl
-import com.sun.faces.context.ExternalContextFactoryImpl
-import com.sun.faces.context.FacesContextFactoryImpl as FCfact
-import com.sun.faces.context.PartialViewContextFactoryImpl
-import com.sun.faces.lifecycle.LifecycleFactoryImpl as Lfact
-import com.sun.faces.renderkit.RenderKitFactoryImpl as RKfact
-import grails.util.BuildSettingsHolder
 import grails.util.Environment
-import grails.util.GrailsUtil
-import grails.util.Holders;
+import grails.util.Holders
 
-import org.codehaus.groovy.grails.commons.ConfigurationHolder
-import org.codehaus.groovy.grails.commons.ControllerArtefactHandler
+import java.lang.reflect.Modifier
+
+import javax.faces.application.FacesMessage
+import javax.faces.application.ProjectStage
+import javax.faces.context.FacesContext
+import javax.faces.webapp.FacesServlet
+
 import org.codehaus.groovy.grails.commons.GrailsClass
 import org.codehaus.groovy.grails.commons.GrailsClassUtils
-import org.codehaus.groovy.grails.compiler.GrailsClassLoader
 import org.codehaus.groovy.grails.plugins.GrailsPluginManager
 import org.codehaus.groovy.grails.web.pages.GroovyPage
 import org.codehaus.groovy.grails.web.pages.TagLibraryLookup
 import org.codehaus.groovy.grails.web.plugins.support.WebMetaUtils
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
-import org.doc4web.grails.jsf.BeanArtefactHandler;
+import org.doc4web.grails.jsf.BeanArtefactHandler
 import org.doc4web.grails.jsf.RedirectDynamicMethod
 import org.doc4web.grails.jsf.RenderDynamicMethod
+import org.doc4web.grails.jsf.TagJsfResolver
+import org.doc4web.grails.jsf.facelets.GrailsResourceResolver
+import org.doc4web.grails.jsf.faces.GrailsHibernatePhaseListener
+import org.doc4web.grails.jsf.faces.ViewScope
 import org.springframework.beans.BeanUtils
+import org.springframework.beans.factory.config.CustomScopeConfigurer
 import org.springframework.beans.factory.config.MethodInvokingFactoryBean
 import org.springframework.context.ApplicationContext
 import org.springframework.validation.Errors
 import org.springframework.web.context.request.RequestContextHolder as RCH
 
-import javax.faces.FactoryFinder
-import javax.faces.application.FacesMessage
-import javax.faces.application.ProjectStage;
-import javax.faces.context.FacesContext
-import javax.faces.event.PhaseListener
-import javax.faces.lifecycle.Lifecycle
-import javax.servlet.ServletContextEvent
-import java.lang.reflect.Modifier
+import com.sun.faces.config.ConfigureListener
 
 class Jsf2GrailsPlugin {
 	// the plugin version
@@ -111,7 +101,7 @@ h2. Extra methods for beans :
 			configuredContextParams = [
 				[
 					"param-name": "javax.faces.FACELETS_RESOURCE_RESOLVER",
-					"param-value": "org.doc4web.grails.jsf.facelets.GrailsResourceResolver"
+					"param-value": GrailsResourceResolver.class.name
 				],
 				[
 					"param-name": "javax.faces.PROJECT_STAGE",
@@ -140,7 +130,7 @@ h2. Extra methods for beans :
 			configuredServlets = [
 				[
 					"servlet-name": "FacesServlet",
-					"servlet-class": "javax.faces.webapp.FacesServlet",
+					"servlet-class": FacesServlet.class.name,
 					"load-on-startup": "1"
 				]
 			]
@@ -177,7 +167,7 @@ h2. Extra methods for beans :
 		def configuredListeners = config.listeners
 		if (!configuredListeners) {
 			configuredListeners = [
-				["listener-class": "com.sun.faces.config.ConfigureListener"]
+				["listener-class": ConfigureListener.class.name]
 			]
 		}
 		xml.listener[-1] + {
@@ -193,13 +183,13 @@ h2. Extra methods for beans :
 	}
 
 	def doWithSpring = {
-		viewScope(org.doc4web.grails.jsf.faces.ViewScope)
+		viewScope ViewScope
 
-		customScopeConfigurer(org.springframework.beans.factory.config.CustomScopeConfigurer) {
+		customScopeConfigurer(CustomScopeConfigurer) {
 			scopes = ['view': ref('viewScope')]
 		}
 
-		gtag(org.doc4web.grails.jsf.TagJsfResolver) {
+		gtag(TagJsfResolver) {
 			gspTagLibraryLookup = ref('gspTagLibraryLookup')
 		}
 
@@ -221,6 +211,12 @@ h2. Extra methods for beans :
 				if (scope) bean.scope = scope
 				if (init) bean.initMethod = "init"
 				if (dispose) bean.destroyMethod = "dispose"
+			}
+			
+			if (manager.hasGrailsPlugin("hibernate")) {
+				grailsHibernatePhaseListener(GrailsHibernatePhaseListener) {
+					sessionFactory = ref("sessionFactory")
+				}
 			}
 		}
 
@@ -277,16 +273,9 @@ h2. Extra methods for beans :
 
 			def beans = beans {
 				"$beanName"(beanClass.getClazz()) { bean ->
-					bean.autowire = true
-					if (scope) {
-						bean.scope = scope
-					}
-					if (init) {
-						bean.initMethod = "init"
-					}
-					if (dispose) {
-						bean.destroyMethod = "dispose"
-					}
+					if (scope) bean.scope = scope
+					if (init) bean.initMethod = "init"
+					if (dispose) bean.destroyMethod = "dispose"
 				}
 			}
 
