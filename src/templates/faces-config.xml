@@ -13,38 +13,4 @@
         </view-handler>
     </application>
 
-    <converter>
-        <converter-for-class>
-            groovy.lang.Closure
-        </converter-for-class>
-        <converter-class>
-            org.doc4web.grails.jsf.faces.converter.ClosureConverter
-        </converter-class>
-    </converter>
-     <converter>
-        <converter-for-class>
-            java.net.URL
-        </converter-for-class>
-        <converter-class>
-            org.doc4web.grails.jsf.faces.converter.URLConverter
-        </converter-class>
-    </converter>
-     <converter>
-        <converter-for-class>
-            java.util.Currency
-        </converter-for-class>
-        <converter-class>
-            org.doc4web.grails.jsf.faces.converter.CurrencyConverter
-        </converter-class>
-    </converter>
-     <converter>
-        <converter-for-class>
-            java.util.Locale
-        </converter-for-class>
-        <converter-class>
-            org.doc4web.grails.jsf.faces.converter.LocaleConverter
-        </converter-class>
-    </converter>
-
-
 </faces-config>

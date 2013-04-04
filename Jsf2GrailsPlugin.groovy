@@ -11,6 +11,8 @@ import com.sun.faces.renderkit.RenderKitFactoryImpl as RKfact
 import grails.util.BuildSettingsHolder
 import grails.util.Environment
 import grails.util.GrailsUtil
+import grails.util.Holders;
+
 import org.codehaus.groovy.grails.commons.ConfigurationHolder
 import org.codehaus.groovy.grails.commons.ControllerArtefactHandler
 import org.codehaus.groovy.grails.commons.GrailsClass
@@ -21,6 +23,7 @@ import org.codehaus.groovy.grails.web.pages.GroovyPage
 import org.codehaus.groovy.grails.web.pages.TagLibraryLookup
 import org.codehaus.groovy.grails.web.plugins.support.WebMetaUtils
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
+import org.doc4web.grails.jsf.BeanArtefactHandler;
 import org.doc4web.grails.jsf.RedirectDynamicMethod
 import org.doc4web.grails.jsf.RenderDynamicMethod
 import org.springframework.beans.BeanUtils
@@ -31,6 +34,7 @@ import org.springframework.web.context.request.RequestContextHolder as RCH
 
 import javax.faces.FactoryFinder
 import javax.faces.application.FacesMessage
+import javax.faces.application.ProjectStage;
 import javax.faces.context.FacesContext
 import javax.faces.event.PhaseListener
 import javax.faces.lifecycle.Lifecycle
@@ -39,8 +43,6 @@ import java.lang.reflect.Modifier
 
 class Jsf2GrailsPlugin {
 	// the plugin version
-	private static final String JSF_SUFFIX = "Jsf"
-
 	def version = "0.2-SNAPSHOT"
 	// the version or versions of Grails the plugin is designed for
 	def grailsVersion = "2.2.0 > *"
@@ -93,81 +95,99 @@ h2. Extra methods for beans :
 
 	def loadAfter = ["controllers", "services"]
 
-	def config = loadJsf2Config()
+	def artefacts = [new BeanArtefactHandler()]
 
 	def watchedResources = [
-			"file:./grails-app/controllers/**/*JsfController.groovy",
-			"file:./plugins/*/grails-app/controllers/**/*JsfController.groovy"
+		"file:./grails-app/beans/**/*Bean.groovy",
+		"file:./plugins/*/grails-app/beans/**/*Bean.groovy"
 	]
 
+	def config = Holders.config.grails.plugins.jsf2
+	
 	def doWithWebDescriptor = { xml ->
-		def facesconfig_location = getFacesconfigLocation(application)
 
-		def params = [
-				"javax.faces.application.CONFIG_FILES": facesconfig_location,
-				"javax.faces.STATE_SAVING_METHOD": "server",
-				"javax.faces.FACELETS_RESOURCE_RESOLVER": "org.doc4web.grails.jsf.facelets.GrailsResourceResolver",
-				"javax.faces.PROJECT_STAGE": translateEnvironnement()
-		]
-
-		if (Environment.current.isReloadEnabled()) {
-			params.put "javax.faces.REFRESH_PERIOD", "0"
-		}
-
-
-
-		ConfigObject confparams = config.jsf.params
-		params = confparams.flatten() + params
-
-		def servlets = xml.servlet[0]
-		def servletsParams = [
-				'Faces Servlet': ['javax.faces.webapp.FacesServlet', 1]
-		]
-
-		def mappings = xml.'servlet-mapping'[0]
-		def mappingParams = [
-				'Faces Servlet': "*.${config.jsf.extension}"
-		]
-
-
-		def contextparams = xml.'context-param'[0]
-		contextparams + {
-			params.each { key, value ->
-				'context-param' {
-					'param-name'(key)
-					'param-value'(value)
-				}
+		def configuredContextParams = config.contextParams
+		if (!configuredContextParams) {
+			configuredContextParams = [
+				[
+					"param-name": "javax.faces.FACELETS_RESOURCE_RESOLVER",
+					"param-value": "org.doc4web.grails.jsf.facelets.GrailsResourceResolver"
+				],
+				[
+					"param-name": "javax.faces.PROJECT_STAGE",
+					"param-value": translateEnvironment()
+				] 
+			]
+			if (Environment.current.isReloadEnabled()) {
+				configuredContextParams << [
+					"param-name": "javax.faces.REFRESH_PERIOD",
+					"param-value": "0"
+				]
 			}
 		}
-
-		servlets + {
-			servletsParams.each { key, value ->
-				servlet {
-					'servlet-name'(key)
-					'servlet-class'(value[0])
-					'load-on-startup'(value[1])
-				}
-			}
-		}
-
-		def listedValues
-		mappings + {
-			mappingParams.each { key, value ->
-				listedValues = [value]
-				listedValues = listedValues.flatten()
-				for (v in listedValues) {
-					'servlet-mapping' {
-						'servlet-name'(key)
-						'url-pattern'(v)
+		xml."context-param"[0] + {
+			configuredContextParams.each { configuredContextParam ->
+				"context-param" {
+					configuredContextParam.each {
+						"${it.key}" "${it.value}"
 					}
 				}
 			}
 		}
-
-		def mimeMapping = xml.'mime-mapping'
-		mimeMapping + {
-			'extension'('ico')
-			'mime-type'('image/x-icon')
+		
+		def configuredServlets = config.servlets
+		if (!configuredServlets) {
+			configuredServlets = [
+				[
+					"servlet-name": "FacesServlet",
+					"servlet-class": "javax.faces.webapp.FacesServlet",
+					"load-on-startup": "1"
+				]
+			]
+		}
+		xml.servlet[-1] + {
+			configuredServlets.each { configuredServlet ->
+				servlet {
+					configuredServlet.each {
+						"${it.key}" "${it.value}"
+					}
+				}
+			}
+		}
+		
+		def configuredServletMappings = config.servletMappings
+		if (!configuredServletMappings) {
+			configuredServletMappings = [
+				[
+					"servlet-name": "FacesServlet",
+					"url-pattern": "*.xhtml"
+				]
+			]
+		}
+		xml.servlet[-1] + {
+			configuredServletMappings.each { configuredServletMapping ->
+				"servlet-mapping" {
+					configuredServletMapping.each {
+						"${it.key}" "${it.value}"
+					}
+				}
+			}
+		}
+		
+		def configuredListeners = config.listeners
+		if (!configuredListeners) {
+			configuredListeners = [
+				["listener-class": "com.sun.faces.config.ConfigureListener"]
+			]
+		}
+		xml.listener[-1] + {
+			configuredListeners.each { configuredListener ->
+				listener {
+					configuredListener.each {
+						"${it.key}" "${it.value}"
+					}
+				}
+			}
 		}
 
 	}
@@ -183,42 +203,27 @@ h2. Extra methods for beans :
 			gspTagLibraryLookup = ref('gspTagLibraryLookup')
 		}
 
-		for (beanClazz in application.controllerClasses) {
-			if (!beanClazz.name.endsWith(JSF_SUFFIX)) {
-				continue
-			}
+		for (beanClazz in application.beanClasses) {
 
 			GrailsClass beanClass = beanClazz
-
-			String scope = beanClass.getPropertyValue("scope")
-			def init = BeanUtils.findMethodWithMinimalParameters(beanClass.clazz, "init") ? true : false
-			def dispose = BeanUtils.findMethodWithMinimalParameters(beanClass.clazz, "dispose") ? true : false
 
 			"${beanClass.fullName}BeanClass"(MethodInvokingFactoryBean) {
 				targetObject = ref("grailsApplication", true)
 				targetMethod = "getArtefact"
-				arguments = [ControllerArtefactHandler.TYPE, beanClass.fullName]
+				arguments = [BeanArtefactHandler.TYPE, beanClass.fullName]
 			}
+			
+			String scope = beanClass.getPropertyValue("scope")
+			def init = BeanUtils.findMethodWithMinimalParameters(beanClass.clazz, "init") ? true : false
+			def dispose = BeanUtils.findMethodWithMinimalParameters(beanClass.clazz, "dispose") ? true : false
 
 			"${beanClass.propertyName}"(beanClass.getClazz()) { bean ->
-				bean.autowire = true
-				if (scope) {
-					bean.scope = scope
-				}
-				if (init) {
-					bean.initMethod = "init"
-				}
-				if (dispose) {
-					bean.destroyMethod = "dispose"
-				}
+				if (scope) bean.scope = scope
+				if (init) bean.initMethod = "init"
+				if (dispose) bean.destroyMethod = "dispose"
 			}
 		}
 
-		if (manager.hasGrailsPlugin("hibernate")) {
-			grailsHibernatePhaseListener(org.doc4web.grails.jsf.faces.GrailsHibernatePhaseListener) {
-				sessionFactory = ref("sessionFactory")
-			}
-		}
 	}
 
 	def doWithDynamicMethods = { ctx ->
@@ -230,11 +235,8 @@ h2. Extra methods for beans :
 			for (namespace in gspTagLibraryLookup.availableNamespaces) {
 				def propName = GrailsClassUtils.getGetterName(namespace)
 				def namespaceDispatcher = gspTagLibraryLookup.lookupNamespaceDispatcher(namespace)
-				def beanClasses = application.controllerClasses*.clazz
+				def beanClasses = application.beanClasses*.clazz
 				for (Class beanClass in beanClasses) {
-					if (!beanClass.name.endsWith(JSF_SUFFIX)) {
-						continue
-					}
 					MetaClass mc = beanClass.metaClass
 					if (!mc.getMetaProperty(namespace)) {
 						mc."$propName" = { namespaceDispatcher }
@@ -253,11 +255,7 @@ h2. Extra methods for beans :
 			}
 		}
 
-		for (bean in application.controllerClasses) {
-			if (!bean.name.endsWith(JSF_SUFFIX)) {
-				continue
-			}
-
+		for (bean in application.beanClasses) {
 			MetaClass mc = bean.metaClass
 			WebMetaUtils.registerCommonWebProperties(mc, application)
 			registerBeanMethods(mc, ctx)
@@ -267,26 +265,10 @@ h2. Extra methods for beans :
 		}
 	}
 
-	def doWithApplicationContext = { applicationContext ->
-		this.initFacesContext()
-
-		def servletContext = applicationContext.servletContext
-		def event = new ServletContextEvent(servletContext)
-		new ConfigureListener().contextInitialized(event)
-
-		def lifecycleFactoryImpl = FactoryFinder.getFactory(FactoryFinder.LIFECYCLE_FACTORY)
-		Lifecycle lifecycle = lifecycleFactoryImpl.getLifecycle(Lfact.DEFAULT_LIFECYCLE)
-
-		if (manager.hasGrailsPlugin("hibernate")) {
-			lifecycle.addPhaseListener applicationContext.getBean("grailsHibernatePhaseListener") as PhaseListener
-		}
-	}
-
 	def onChange = { event ->
 
-		if (event.source && event.source instanceof Class && application.isArtefactOfType(ControllerArtefactHandler.TYPE, event.source as Class)
-				&& ((Class) event.source).name.endsWith(JSF_SUFFIX)) {
-			def beanClass = application.addArtefact(ControllerArtefactHandler.TYPE, event.source as Class)
+		if (event.source && event.source instanceof Class && application.isArtefactOfType(BeanArtefactHandler.TYPE, event.source as Class)) {
+			def beanClass = application.addArtefact(BeanArtefactHandler.TYPE, event.source as Class)
 			def beanName = "${beanClass.propertyName}"
 			def scope = beanClass.getPropertyValue("scope")
 
@@ -319,73 +301,15 @@ h2. Extra methods for beans :
 
 	}
 
-	private String getFacesconfigLocation(application) {
-		if (application.warDeployed) {
-			return '/WEB-INF/faces-config.xml'
-		}
-		else {
-			return new File(BuildSettingsHolder.settings.baseDir.absolutePath + '/web-app/WEB-INF/faces-config.xml').absolutePath
-		}
-	}
-
-	private ConfigObject loadJsf2Config() {
-
-		def config = ConfigurationHolder.config
-		def currentEnvName = Environment.getCurrent().name
-		def slurper = new ConfigSlurper(currentEnvName)
-		GroovyClassLoader classLoader = new GroovyClassLoader(getClass().classLoader)
-		config.merge(slurper.parse(classLoader.loadClass('DefaultJsf2Config')))
-
-		try {
-			config.merge(slurper.parse(getClass().classLoader.loadClass('Jsf2Config')))
-		}
-		catch (Exception ignored) {
-			// ignore, just use the defaults
-		}
-
-		ConfigurationHolder.setConfig config
-
-		return config
-	}
-
-	private initFacesContext() {
-		try {
-			def oldcl = Thread.currentThread().getContextClassLoader()
-			if (oldcl instanceof GrailsClassLoader) {
-				Thread.currentThread().setContextClassLoader oldcl.parent
-			}
-			FactoryFinder.setFactory FactoryFinder.LIFECYCLE_FACTORY, Lfact.name
-			FactoryFinder.setFactory FactoryFinder.APPLICATION_FACTORY, Afact.name
-			FactoryFinder.setFactory FactoryFinder.RENDER_KIT_FACTORY, RKfact.name
-			FactoryFinder.setFactory FactoryFinder.FACES_CONTEXT_FACTORY, FCfact.name
-
-			FactoryFinder.setFactory FactoryFinder.EXCEPTION_HANDLER_FACTORY, ExceptionHandlerFactoryImpl.name
-			FactoryFinder.setFactory FactoryFinder.EXTERNAL_CONTEXT_FACTORY, ExternalContextFactoryImpl.name
-			FactoryFinder.setFactory FactoryFinder.PARTIAL_VIEW_CONTEXT_FACTORY, PartialViewContextFactoryImpl.name
-
-			// ConfigManager.getInstance().initialize(WebConfiguration.getInstance(context.getExternalContext()).getServletContext())
-			def wc = WebConfiguration.getInstance FacesContext.currentInstance.externalContext
-			ConfigManager.instance.initialize wc.servletContext
-			/*println FacesContext.getCurrentInstance().getExternalContext().getApplicationMap().get(ApplicationAssociate.ASSOCIATE_KEY)
-			 Thread.currentThread().setContextClassLoader oldcl*/
-
-		}
-		catch (e) {
-			e.printStackTrace()
-		}
-	}
-
-	private String translateEnvironnement() {
+	private String translateEnvironment() {
 		switch (Environment.current.name) {
-			case Environment.DEVELOPMENT: return "development";
-			case Environment.TEST: return "test";
-			default:
-				return "production";
+			case Environment.DEVELOPMENT: return ProjectStage.Development.name()
+			case Environment.TEST: return ProjectStage.SystemTest.name()
+			default: return ProjectStage.Production.name()
 		}
 	}
 
 	def registerBeanMethods(MetaClass mc, ApplicationContext ctx) {
-
 
 		mc.el { String expr ->
 			FacesContext fc = FacesContext.currentInstance

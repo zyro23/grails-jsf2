@@ -1,12 +1,12 @@
-import grails.util.BuildSettingsHolder
-import org.codehaus.groovy.grails.commons.ConfigurationHolder
+eventCompileStart = {
 
-//http://jira.codehaus.org/browse/GRAILS-6012
-//TODO workaround for web.xml
-eventPackagingEnd = {
+ant.copy(
+	file: "${jsf2PluginDir}/src/templates/faces-config.xml",
+	todir: "${basedir}/web-app/WEB-INF"
+)
+ant.copy(
+	file: "${jsf2PluginDir}/src/templates/web.xml",
+	todir: "${basedir}/web-app/WEB-INF"
+)
 
-  def config = ConfigurationHolder.config
-
-  if (config.jsf.copy.web.xml)
-    Ant.copy(file: BuildSettingsHolder.settings.webXmlLocation , todir: "${basedir}/web-app/WEB-INF")
 }
