@@ -16,6 +16,7 @@ import org.codehaus.groovy.grails.web.pages.TagLibraryLookup
 import org.codehaus.groovy.grails.web.plugins.support.WebMetaUtils
 import org.codehaus.groovy.grails.web.servlet.GrailsApplicationAttributes
 import org.doc4web.grails.jsf.BeanArtefactHandler
+import org.doc4web.grails.jsf.FacesUtils;
 import org.doc4web.grails.jsf.RedirectDynamicMethod
 import org.doc4web.grails.jsf.RenderDynamicMethod
 import org.doc4web.grails.jsf.TagJsfResolver
@@ -316,6 +317,11 @@ h2. Extra methods for beans :
 			def webRequest = RCH.currentRequestAttributes()
 			webRequest.attributes.getViewUri(name, webRequest.currentRequest)
 		}
+		
+		mc.translateErrors = { Errors errors, String formId ->
+			FacesUtils.translateErrors errors, formId
+		}
+		
 		mc.setErrors = { Errors errors ->
 			RCH.currentRequestAttributes().setAttribute(GrailsApplicationAttributes.ERRORS, errors, 0)
 		}
