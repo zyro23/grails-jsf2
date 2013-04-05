@@ -6,11 +6,8 @@
 
     <application>
         <el-resolver>
-            org.doc4web.grails.jsf.GrailsELResolver
+            org.springframework.web.jsf.el.SpringBeanFacesELResolver
         </el-resolver>
-        <view-handler>
-            org.doc4web.grails.jsf.faces.ExtMultiViewHandler
-        </view-handler>
     </application>
 
 </faces-config>
